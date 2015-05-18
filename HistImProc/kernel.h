@@ -1,5 +1,7 @@
 #pragma once
 
-#include "cuda_runtime.h"
+#include <opencv2/opencv.hpp>
 
-cudaError_t addWithCuda(int *c, const int *a, const int *b, unsigned int size);
+cv::Mat adjust_brightness(const cv::Mat& img, int diff);
+
+cv::Mat calculate_histogram(const cv::Mat& img);
