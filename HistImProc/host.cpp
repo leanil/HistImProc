@@ -12,13 +12,17 @@ using namespace cv;
 int main() {
 	try {
 		Mat src = imread("Lenna.png", CV_LOAD_IMAGE_GRAYSCALE);
-		//Mat result = adjust_brightness(src, 100);
-		//Mat result = equalize_histogram(src);
-		Mat result = otsu_thresholding(src);
+		Mat brightness = adjust_brightness(src, 100);
+		Mat contrast = equalize_histogram(src);
+		Mat otsu = otsu_thresholding(src);
 		imshow("original", src);
-		imshow("result", result);
+		imshow("brightness", brightness);
+		imshow("contrast", contrast);
+		imshow("Otsu thresholding", otsu);
 
-		/*int histSize = 256;
+		cout << "\n--- histogram benchmark ---\n";
+		src = imread("Lenna4x4.png", CV_LOAD_IMAGE_GRAYSCALE);
+		int histSize = 256;
 		float range[] { 0, 256 };
 		const float* histRange{ range };
 		Mat cpu_hist, gpu_hist;
@@ -28,10 +32,12 @@ int main() {
 		cout << "histogram calculation on cpu: "
 			<< chrono::duration_cast<chrono::milliseconds>(stop - start).count() << " ms\n";
 		gpu_hist = calculate_histogram(src);
-		cout << equal(cpu_hist.begin<float>(), cpu_hist.end<float>(), gpu_hist.begin<float>()) << endl;*/
+		cout << "equality test: "
+			<< equal(cpu_hist.begin<float>(), cpu_hist.end<float>(), gpu_hist.begin<float>()) << endl;
+
 		waitKey();
 	}
-	catch (const cv::Exception& ex) {
+	catch (const Exception& ex) {
 		std::cout << "Error: " << ex.what() << std::endl;
 	}
 
