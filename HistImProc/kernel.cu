@@ -77,6 +77,19 @@ __global__ void histogram_kernel(uchar* img, size_t pitch, int width, int height
 	}
 }
 
+__global__ void histogram_equalizer_kernel(uchar* img, size_t pitch, int width, int height, float* map) {
+	int col = blockIdx.x * blockDim.x + threadIdx.x;
+	int row = blockIdx.y * blockDim.y + threadIdx.y;
+	int nx = blockDim.x * gridDim.x;
+	int ny = blockDim.y * gridDim.y;
+	for (int y = row; y < height; y += ny) {
+		for (int x = col; x < width; x += nx) {
+			uchar* pos = img + y*pitch + x;
+			*pos = map[*pos];
+		}
+	}
+}
+
 Mat adjust_brightness(const Mat& img, int diff) {
 	uchar* d_img;
 	size_t pitch;
@@ -90,7 +103,7 @@ Mat adjust_brightness(const Mat& img, int diff) {
 	return result;
 }
 
-Mat calculate_histogram(const cv::Mat& img) {
+Mat calculate_histogram(const Mat& img) {
 	uchar* d_img;
 	size_t pitch;
 	copy_image_to_device(img, d_img, pitch);
@@ -98,21 +111,46 @@ Mat calculate_histogram(const cv::Mat& img) {
 	const unsigned &width = img.size().width, &height = img.size().height;
 	float* d_hist;
 	check(cudaMalloc(&d_hist, 256 * sizeof(float)));
-	check(cudaMemset(d_hist, 0.0f, 256 * sizeof(float)));
+	check(cudaMemset(d_hist, 0, 256 * sizeof(float)));
 
 	cudaEvent_t start, stop;
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
+	check(cudaEventCreate(&start));
+	check(cudaEventCreate(&stop));
 
-	cudaEventRecord(start);
+	check(cudaEventRecord(start));
 	histogram_kernel << <dim_grid, dim_block >> >(d_img, pitch, width, height, d_hist);
-	cudaEventRecord(stop);
+	check(cudaEventRecord(stop));
 
 	Mat result(256, 1, CV_32FC1);
 	check(cudaMemcpy(result.data, d_hist, result.total()*result.elemSize(), cudaMemcpyDeviceToHost));
-	cudaEventSynchronize(stop);
+	check(cudaEventSynchronize(stop));
 	float milliseconds = 0;
-	cudaEventElapsedTime(&milliseconds, start, stop);
-	cout << "histogram calculation: " << milliseconds << " ms\n";
+	check(cudaEventElapsedTime(&milliseconds, start, stop));
+	cout << "histogram calculation on gpu: " << milliseconds << " ms\n";
+	check(cudaEventDestroy(start));
+	check(cudaEventDestroy(stop));
+	return result;
+}
+
+Mat equalize_histogram(const Mat& img) {
+	Mat hist = calculate_histogram(img);
+	for (int i = 1; i < hist.size[0]; i++) {
+		hist.at<float>(i) += hist.at<float>(i - 1);
+	}
+	hist *= 255.0f / hist.at<float>(hist.size[0] - 1);
+
+	uchar* d_img;
+	size_t pitch;
+	copy_image_to_device(img, d_img, pitch);
+
+	const unsigned &width = img.size().width, &height = img.size().height;
+	float* d_map;
+	check(cudaMalloc(&d_map, hist.total() * hist.elemSize()));
+	check(cudaMemcpy(d_map, hist.data, hist.total() * hist.elemSize(), cudaMemcpyHostToDevice));
+
+	histogram_equalizer_kernel << <dim_grid, dim_block >> >(d_img, pitch, width, height, d_map);
+
+	Mat result(height, width, img.type());
+	check(cudaMemcpy2D(result.data, width, d_img, pitch, width * img.elemSize(), height, cudaMemcpyDeviceToHost));
 	return result;
 }
