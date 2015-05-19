@@ -7,3 +7,5 @@ cv::Mat adjust_brightness(const cv::Mat& img, int diff);
 cv::Mat calculate_histogram(const cv::Mat& img);
 
 cv::Mat equalize_histogram(const cv::Mat& img);
+
+cv::Mat otsu_thresholding(const cv::Mat& img);

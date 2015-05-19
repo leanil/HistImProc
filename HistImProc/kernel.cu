@@ -58,7 +58,7 @@ __global__ void histogram_kernel(uchar* img, size_t pitch, int width, int height
 	int linear_idx = threadIdx.y * blockDim.x + threadIdx.x;
 	int block_size = blockDim.x * blockDim.y;
 	for (int i = linear_idx; i < 256; i += block_size) {
-		loc_hist[i] = 0;
+		loc_hist[i] = 0.0f;
 	}
 
 	for (int y = row; y < height; y += ny) {
@@ -86,6 +86,19 @@ __global__ void histogram_equalizer_kernel(uchar* img, size_t pitch, int width, 
 		for (int x = col; x < width; x += nx) {
 			uchar* pos = img + y*pitch + x;
 			*pos = map[*pos];
+		}
+	}
+}
+
+__global__ void otsu_thresholding_kernel(uchar* img, size_t pitch, int width, int height, float t) {
+	int col = blockIdx.x * blockDim.x + threadIdx.x;
+	int row = blockIdx.y * blockDim.y + threadIdx.y;
+	int nx = blockDim.x * gridDim.x;
+	int ny = blockDim.y * gridDim.y;
+	for (int y = row; y < height; y += ny) {
+		for (int x = col; x < width; x += nx) {
+			uchar* pos = img + y*pitch + x;
+			*pos = (*pos>t) ? 255.0f : 0.0f;
 		}
 	}
 }
@@ -149,6 +162,40 @@ Mat equalize_histogram(const Mat& img) {
 	check(cudaMemcpy(d_map, hist.data, hist.total() * hist.elemSize(), cudaMemcpyHostToDevice));
 
 	histogram_equalizer_kernel << <dim_grid, dim_block >> >(d_img, pitch, width, height, d_map);
+
+	Mat result(height, width, img.type());
+	check(cudaMemcpy2D(result.data, width, d_img, pitch, width * img.elemSize(), height, cudaMemcpyDeviceToHost));
+	return result;
+}
+
+Mat otsu_thresholding(const cv::Mat& img) {
+	Mat P = calculate_histogram(img);
+	P /= sum(P)[0];
+	float avg = 0;
+	for (int i = 0; i < P.size[0]; i++) {
+		avg += i*P.at<float>(i);
+	}
+	int t;
+	float sub_sum = P.at<float>(0), sub_avg1 = 0, sub_avg2, t_var = 0;
+	for (int i = 0; i < P.size[0] - 1; i++) {
+		if (P.at<float>(i + 1) == 0) { continue; }
+		sub_avg2 = (avg - sub_sum*sub_avg1) / (1 - sub_sum);
+		float var = sub_sum*(1 - sub_sum)*(sub_avg1 - sub_avg2)*(sub_avg1 - sub_avg2);
+		if (var > t_var) {
+			t_var = var;
+			t = i;
+		}
+		float old = sub_sum;
+		sub_sum += P.at<float>(i + 1);
+		sub_avg1 = (old*sub_avg1 + (i + 1)*P.at<float>(i + 1)) / (sub_sum);
+	}
+
+	uchar* d_img;
+	size_t pitch;
+	copy_image_to_device(img, d_img, pitch);
+	const unsigned &width = img.size().width, &height = img.size().height;
+	float ft = (float)t;
+	otsu_thresholding_kernel << <dim_grid, dim_block >> >(d_img, pitch, width, height, ft);
 
 	Mat result(height, width, img.type());
 	check(cudaMemcpy2D(result.data, width, d_img, pitch, width * img.elemSize(), height, cudaMemcpyDeviceToHost));
