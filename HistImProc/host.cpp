@@ -11,9 +11,9 @@ using namespace cv;
 int main() {
 	try {
 		Mat src = imread("Lenna.png", CV_LOAD_IMAGE_GRAYSCALE);
-		Mat bright = adjust_brightness(src, 50);
-		imshow("original", src);
-		imshow("result", bright);
+		//Mat bright = adjust_brightness(src, 100);
+		//imshow("original", src);
+		//imshow("result", bright);
 
 		int histSize = 256;
 		float range[] { 0, 256 };
@@ -21,6 +21,7 @@ int main() {
 		Mat cpu_hist, gpu_hist;
 		calcHist(&src, 1, 0, Mat(), cpu_hist, 1, &histSize, &histRange);
 		gpu_hist = calculate_histogram(src);
+		cout << equal(cpu_hist.begin<float>(), cpu_hist.end<float>(), gpu_hist.begin<float>()) << endl;
 		waitKey();
 	}
 	catch (const cv::Exception& ex) {
