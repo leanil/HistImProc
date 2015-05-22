@@ -113,6 +113,7 @@ Mat adjust_brightness(const Mat& img, int diff) {
 
 	Mat result(height, width, img.type());
 	check(cudaMemcpy2D(result.data, width, d_img, pitch, width * img.elemSize(), height, cudaMemcpyDeviceToHost));
+	check(cudaFree(d_img));
 	return result;
 }
 
@@ -142,6 +143,8 @@ Mat calculate_histogram(const Mat& img) {
 	cout << "histogram calculation on gpu: " << milliseconds << " ms\n";
 	check(cudaEventDestroy(start));
 	check(cudaEventDestroy(stop));
+	check(cudaFree(d_img));
+	check(cudaFree(d_hist));
 	return result;
 }
 
@@ -165,6 +168,8 @@ Mat equalize_histogram(const Mat& img) {
 
 	Mat result(height, width, img.type());
 	check(cudaMemcpy2D(result.data, width, d_img, pitch, width * img.elemSize(), height, cudaMemcpyDeviceToHost));
+	check(cudaFree(d_img));
+	check(cudaFree(d_map));
 	return result;
 }
 
@@ -199,5 +204,6 @@ Mat otsu_thresholding(const cv::Mat& img) {
 
 	Mat result(height, width, img.type());
 	check(cudaMemcpy2D(result.data, width, d_img, pitch, width * img.elemSize(), height, cudaMemcpyDeviceToHost));
+	check(cudaFree(d_img));
 	return result;
 }
